@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <!-- 下面这行里填写你的鸭科夫安装路径 -->
+    <DuckovPath>/Users/jacksonc/Library/Application Support/Steam/steamapps/common/Escape from Duckov/Duckov.app/Contents/Resources/Data</DuckovPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(DuckovPath)/Managed/TeamSoda.*" />
+    <Reference Include="$(DuckovPath)/Managed/ItemStatsSystem.dll" />
+    <Reference Include="$(DuckovPath)/Managed/UniTask.dll" />
+    <Reference Include="$(DuckovPath)/Managed/NodeCanvas.dll" />
+    <Reference Include="$(DuckovPath)/Managed/Unity*" />
+  </ItemGroup>
+</Project>

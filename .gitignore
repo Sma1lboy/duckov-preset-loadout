@@ -1,0 +1,31 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# macOS
+.DS_Store
+._*
+
+# Backup files
+*.backup
+*~
+
+# Compiled DLL (if you want to exclude it from git)
+# Uncomment the line below if you don't want to commit the compiled DLL
+# *.dll
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
