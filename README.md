@@ -12,31 +12,35 @@
 
 ## 使用方法
 
+### 打开面板
+- 按 **P** 键打开/关闭装备预设面板
+
 ### 保存预设
-1. 装备好你想要保存的装备
-2. 按 **Ctrl + 1/2/3** 保存到对应的预设槽位
-3. 游戏会显示"✓ 预设 X 已保存 (N 件装备)"
+1. 装备好你想要保存的装备（装备槽位 + 背包）
+2. 在预设面板中点击"保存当前"按钮
+3. 或按 **Ctrl + 1/2/3** 快捷键保存到对应槽位
+4. 游戏会显示"✓ 预设 X 已保存 (装备:N 背包:M)"
 
 ### 应用预设
 1. 确保仓库中有足够的装备
-2. 按 **1/2/3** 应用对应的预设
-3. 系统会自动从仓库中获取装备并装配到角色身上
-4. 游戏会显示成功和失败的数量
-
-### 查看帮助
-- 按 **H** 键随时查看帮助信息
+2. 在预设面板中点击"应用此预设"按钮
+3. 或按 **1/2/3** 快捷键应用对应的预设
+4. 系统会：
+   - 优先装备"装备槽位"物品
+   - 然后放入"背包"物品
+5. 游戏会显示成功和失败的数量
 
 ## 快捷键一览
 
 | 快捷键 | 功能 |
 |--------|------|
+| P | 打开/关闭预设面板 |
 | Ctrl + 1 | 保存预设 1 |
 | Ctrl + 2 | 保存预设 2 |
 | Ctrl + 3 | 保存预设 3 |
 | 1 | 应用预设 1 |
 | 2 | 应用预设 2 |
 | 3 | 应用预设 3 |
-| H | 显示帮助 |
 
 ## 安装方法
 
@@ -48,7 +52,14 @@
 ### 方法 2: 从源码编译
 1. 打开 `PresetLoadout.csproj`
 2. 修改 `<DuckovPath>` 为你的游戏安装路径
-3. 运行 `dotnet build -c Release`
+3. 运行快速部署脚本:
+   ```bash
+   ./scripts/deploy.sh
+   ```
+   或手动编译:
+   ```bash
+   dotnet build -c Release
+   ```
 4. 编译后的 DLL 在 `bin/Release/netstandard2.1/PresetLoadout.dll`
 5. 创建发布文件夹并复制以下文件:
    ```
@@ -58,18 +69,52 @@
    └── preview.png
    ```
 
+## 开发工具
+
+详细的开发脚本和工作流，请参考 [scripts/README.md](scripts/README.md)。
+
+**快速开发命令**:
+- `./scripts/deploy.sh` - 编译并部署
+- `./scripts/watch-log.sh` - 实时查看游戏日志
+
 ## 技术细节
 
+### 项目结构
+```
+PresetLoadout/
+├── ModBehaviour.cs       # 主逻辑：UI、按键处理、预设管理
+├── PresetConfig.cs       # 数据模型：PresetConfig 和 PresetStorage
+├── JsonHelper.cs         # JSON 序列化工具（手动实现）
+├── scripts/              # 开发脚本
+│   ├── deploy.sh         # 快速编译部署
+│   ├── watch-log.sh      # 实时日志监控
+│   └── README.md         # 脚本文档
+├── PresetLoadout.csproj  # 项目配置
+└── README.md             # 本文件
+```
+
 ### 数据存储
-- 配置文件位置: `Application.persistentDataPath/PresetLoadout_Config.json`
-- 使用 JSON 格式存储预设数据
-- 每个预设存储物品的 TypeID 列表
+- **配置文件位置**: `~/Library/Application Support/TeamSoda/Duckov/PresetLoadout_Config.json` (macOS)
+- **格式**: 手动实现的 JSON 序列化（Unity 的 JsonUtility 不支持当前数据结构）
+- **数据结构**:
+  - 每个预设分为两部分：
+    - `EquippedItemTypeIDs` - 装备槽位的物品
+    - `InventoryItemTypeIDs` - 背包中的物品
 
 ### 工作原理
-1. **保存预设**: 扫描玩家角色身上的所有物品，提取 TypeID 并保存
-2. **应用预设**: 遍历预设中的 TypeID，在仓库中查找匹配物品并发送到角色身上
-3. **仓库检查**: 使用 `Item.IsInPlayerStorage()` 检查物品是否在仓库中
-4. **物品转移**: 使用 `ItemUtilities.SendToPlayerCharacter()` 将物品发送到角色身上
+1. **保存预设**:
+   - 扫描玩家角色身上的所有物品
+   - 通过 `IsItemInInventory()` 判断物品在装备槽位还是背包
+   - 分别保存到 `EquippedItemTypeIDs` 和 `InventoryItemTypeIDs`
+
+2. **应用预设**:
+   - 优先应用装备槽位物品（使用 `SendToPlayerCharacter`）
+   - 然后应用背包物品（使用 `SendToPlayerCharacterInventory`）
+   - 从仓库中查找匹配物品并转移
+
+3. **序列化**:
+   - 使用 `JsonHelper` 手动构建/解析 JSON
+   - 避开 Unity JsonUtility 的限制
 
 ## 注意事项
 
