@@ -153,9 +153,9 @@ namespace PresetLoadout
             string statusText = "空";
             bool hasItems = false;
 
-            if (_presetStorage.Presets.ContainsKey(slotNumber))
+            PresetConfig preset = _presetStorage.GetPreset(slotNumber);
+            if (preset != null)
             {
-                PresetConfig preset = _presetStorage.Presets[slotNumber];
                 int totalCount = preset.GetTotalItemCount();
                 hasItems = totalCount > 0;
 
@@ -278,9 +278,16 @@ namespace PresetLoadout
                 }
 
                 // 保存到预设（使用新的数据结构）
-                _presetStorage.Presets[slotNumber].EquippedItemTypeIDs = equippedIDs;
-                _presetStorage.Presets[slotNumber].InventoryItemTypeIDs = inventoryIDs;
-                _presetStorage.Presets[slotNumber].PresetName = $"预设 {slotNumber}";
+                var preset = _presetStorage.GetPreset(slotNumber);
+                if (preset == null)
+                {
+                    preset = new PresetConfig($"预设 {slotNumber}");
+                    _presetStorage.SetPreset(slotNumber, preset);
+                }
+
+                preset.EquippedItemTypeIDs = equippedIDs;
+                preset.InventoryItemTypeIDs = inventoryIDs;
+                preset.PresetName = $"预设 {slotNumber}";
 
                 // 保存到文件
                 SaveConfig();
@@ -335,14 +342,14 @@ namespace PresetLoadout
         {
             try
             {
-                if (!_presetStorage.Presets.ContainsKey(slotNumber))
+                PresetConfig preset = _presetStorage.GetPreset(slotNumber);
+
+                if (preset == null)
                 {
                     ShowMessage($"预设 {slotNumber} 不存在!");
                     Debug.Log($"[PresetLoadout] Apply Preset {slotNumber}: Preset does not exist");
                     return;
                 }
-
-                PresetConfig preset = _presetStorage.Presets[slotNumber];
 
                 int totalItems = preset.GetTotalItemCount();
                 if (totalItems == 0)
@@ -590,39 +597,130 @@ namespace PresetLoadout
         {
             try
             {
+                Debug.Log($"[PresetLoadout] Loading config from: {ConfigFilePath}");
+
                 if (File.Exists(ConfigFilePath))
                 {
                     string json = File.ReadAllText(ConfigFilePath);
-                    _presetStorage = JsonUtility.FromJson<PresetStorage>(json);
-                    Debug.Log($"Loaded config from {ConfigFilePath}");
+                    Debug.Log($"[PresetLoadout] Config file exists, size: {json.Length} bytes");
+
+                    // 手动解析 JSON
+                    _presetStorage = new PresetStorage();
+
+                    // 简单的 JSON 解析（查找每个预设）
+                    for (int i = 0; i < 3; i++)
+                    {
+                        int presetIndex = json.IndexOf($"\"PresetName\": \"预设 {i + 1}\"");
+                        if (presetIndex == -1) continue;
+
+                        var preset = _presetStorage.Presets[i];
+
+                        // 解析 EquippedItemTypeIDs
+                        int equippedStart = json.IndexOf("\"EquippedItemTypeIDs\": [", presetIndex);
+                        if (equippedStart != -1)
+                        {
+                            int equippedEnd = json.IndexOf("]", equippedStart);
+                            string equippedStr = json.Substring(equippedStart + 24, equippedEnd - equippedStart - 24);
+                            if (!string.IsNullOrWhiteSpace(equippedStr))
+                            {
+                                preset.EquippedItemTypeIDs = ParseIntArray(equippedStr);
+                            }
+                        }
+
+                        // 解析 InventoryItemTypeIDs
+                        int inventoryStart = json.IndexOf("\"InventoryItemTypeIDs\": [", presetIndex);
+                        if (inventoryStart != -1)
+                        {
+                            int inventoryEnd = json.IndexOf("]", inventoryStart);
+                            string inventoryStr = json.Substring(inventoryStart + 25, inventoryEnd - inventoryStart - 25);
+                            if (!string.IsNullOrWhiteSpace(inventoryStr))
+                            {
+                                preset.InventoryItemTypeIDs = ParseIntArray(inventoryStr);
+                            }
+                        }
+                    }
+
+                    Debug.Log($"[PresetLoadout] ✓ Loaded {_presetStorage.Presets.Length} presets from config");
+                    for (int i = 0; i < _presetStorage.Presets.Length; i++)
+                    {
+                        var preset = _presetStorage.Presets[i];
+                        int totalItems = preset?.GetTotalItemCount() ?? 0;
+                        Debug.Log($"[PresetLoadout]   Preset {i + 1}: {totalItems} items ({preset?.GetDescription()})");
+                    }
                 }
                 else
                 {
                     _presetStorage = new PresetStorage();
-                    Debug.Log("Created new preset storage");
+                    Debug.Log($"[PresetLoadout] Config file does not exist, created new preset storage");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to load config: {ex.Message}");
+                Debug.LogError($"[PresetLoadout] ✗ Failed to load config: {ex.Message}\n{ex.StackTrace}");
                 _presetStorage = new PresetStorage();
             }
         }
 
         /// <summary>
-        /// 保存配置文件
+        /// 解析整数数组字符串 "1, 2, 3" -> List<int>
+        /// </summary>
+        private List<int> ParseIntArray(string str)
+        {
+            var result = new List<int>();
+            if (string.IsNullOrWhiteSpace(str)) return result;
+
+            var parts = str.Split(',');
+            foreach (var part in parts)
+            {
+                if (int.TryParse(part.Trim(), out int value))
+                {
+                    result.Add(value);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 保存配置文件 - 手动 JSON 序列化
         /// </summary>
         private void SaveConfig()
         {
             try
             {
-                string json = JsonUtility.ToJson(_presetStorage, true);
+                // 手动构建 JSON (因为 JsonUtility 在此环境不工作)
+                var lines = new List<string>();
+                lines.Add("{");
+                lines.Add("  \"Presets\": [");
+
+                for (int i = 0; i < _presetStorage.Presets.Length; i++)
+                {
+                    var preset = _presetStorage.Presets[i];
+                    lines.Add("    {");
+                    lines.Add($"      \"PresetName\": \"{preset.PresetName}\",");
+
+                    // EquippedItemTypeIDs
+                    lines.Add("      \"EquippedItemTypeIDs\": [" +
+                        string.Join(", ", preset.EquippedItemTypeIDs ?? new List<int>()) + "],");
+
+                    // InventoryItemTypeIDs
+                    lines.Add("      \"InventoryItemTypeIDs\": [" +
+                        string.Join(", ", preset.InventoryItemTypeIDs ?? new List<int>()) + "]");
+
+                    lines.Add("    }" + (i < _presetStorage.Presets.Length - 1 ? "," : ""));
+                }
+
+                lines.Add("  ]");
+                lines.Add("}");
+
+                string json = string.Join("\n", lines);
                 File.WriteAllText(ConfigFilePath, json);
-                Debug.Log($"Saved config to {ConfigFilePath}");
+
+                Debug.Log($"[PresetLoadout] ✓ Saved config to {ConfigFilePath}");
+                Debug.Log($"[PresetLoadout] JSON length: {json.Length} bytes");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to save config: {ex.Message}");
+                Debug.LogError($"[PresetLoadout] ✗ Failed to save config: {ex.Message}\n{ex.StackTrace}");
             }
         }
 

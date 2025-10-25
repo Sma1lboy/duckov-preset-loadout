@@ -9,23 +9,20 @@ namespace PresetLoadout
     [Serializable]
     public class PresetConfig
     {
-        public string PresetName { get; set; } = "";
+        // Unity JsonUtility 只支持公共字段，不支持属性！
+        public string PresetName = "";
 
         /// <summary>
         /// 装备在角色身上的物品 (装备槽位)
         /// 应用时优先装备这些物品
         /// </summary>
-        public List<int> EquippedItemTypeIDs { get; set; } = new List<int>();
+        public List<int> EquippedItemTypeIDs = new List<int>();
 
         /// <summary>
         /// 在背包中的物品
         /// 应用时放入背包
         /// </summary>
-        public List<int> InventoryItemTypeIDs { get; set; } = new List<int>();
-
-        // 为了兼容旧版本配置，保留这个字段但标记为过时
-        [Obsolete("Use EquippedItemTypeIDs and InventoryItemTypeIDs instead")]
-        public List<int> ItemTypeIDs { get; set; } = new List<int>();
+        public List<int> InventoryItemTypeIDs = new List<int>();
 
         public PresetConfig()
         {
@@ -65,11 +62,37 @@ namespace PresetLoadout
     [Serializable]
     public class PresetStorage
     {
-        public Dictionary<int, PresetConfig> Presets { get; set; } = new Dictionary<int, PresetConfig>
+        // 使用数组而不是 Dictionary，因为 Unity 的 JsonUtility 不支持 Dictionary
+        // 必须先声明为 null，然后在构造函数中初始化，否则 JsonUtility 无法序列化
+        public PresetConfig[] Presets;
+
+        public PresetStorage()
         {
-            { 1, new PresetConfig("预设 1") },
-            { 2, new PresetConfig("预设 2") },
-            { 3, new PresetConfig("预设 3") }
-        };
+            // 在构造函数中初始化
+            Presets = new PresetConfig[3];
+            Presets[0] = new PresetConfig("预设 1");
+            Presets[1] = new PresetConfig("预设 2");
+            Presets[2] = new PresetConfig("预设 3");
+        }
+
+        /// <summary>
+        /// 获取预设 (1-indexed)
+        /// </summary>
+        public PresetConfig GetPreset(int slotNumber)
+        {
+            if (slotNumber < 1 || slotNumber > Presets.Length)
+                return null;
+            return Presets[slotNumber - 1];
+        }
+
+        /// <summary>
+        /// 设置预设 (1-indexed)
+        /// </summary>
+        public void SetPreset(int slotNumber, PresetConfig preset)
+        {
+            if (slotNumber < 1 || slotNumber > Presets.Length)
+                return;
+            Presets[slotNumber - 1] = preset;
+        }
     }
 }
