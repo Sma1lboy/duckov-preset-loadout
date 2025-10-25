@@ -62,37 +62,56 @@ namespace PresetLoadout
     [Serializable]
     public class PresetStorage
     {
-        // 使用数组而不是 Dictionary，因为 Unity 的 JsonUtility 不支持 Dictionary
-        // 必须先声明为 null，然后在构造函数中初始化，否则 JsonUtility 无法序列化
-        public PresetConfig[] Presets;
+        // 使用 List 支持动态添加/删除
+        public List<PresetConfig> Presets = new List<PresetConfig>();
 
         public PresetStorage()
         {
-            // 在构造函数中初始化
-            Presets = new PresetConfig[3];
-            Presets[0] = new PresetConfig("预设 1");
-            Presets[1] = new PresetConfig("预设 2");
-            Presets[2] = new PresetConfig("预设 3");
+            // 初始化至少 3 个预设
+            if (Presets == null || Presets.Count == 0)
+            {
+                Presets = new List<PresetConfig>
+                {
+                    new PresetConfig("预设 1"),
+                    new PresetConfig("预设 2"),
+                    new PresetConfig("预设 3")
+                };
+            }
         }
 
         /// <summary>
-        /// 获取预设 (1-indexed)
+        /// 添加新预设
         /// </summary>
-        public PresetConfig GetPreset(int slotNumber)
+        public void AddPreset()
         {
-            if (slotNumber < 1 || slotNumber > Presets.Length)
-                return null;
-            return Presets[slotNumber - 1];
+            int nextNumber = Presets.Count + 1;
+            Presets.Add(new PresetConfig($"预设 {nextNumber}"));
         }
 
         /// <summary>
-        /// 设置预设 (1-indexed)
+        /// 删除预设（但至少保留 3 个）
         /// </summary>
-        public void SetPreset(int slotNumber, PresetConfig preset)
+        public bool RemovePreset(int index)
         {
-            if (slotNumber < 1 || slotNumber > Presets.Length)
-                return;
-            Presets[slotNumber - 1] = preset;
+            if (Presets.Count <= 3 || index < 0 || index >= Presets.Count)
+            {
+                return false;
+            }
+            Presets.RemoveAt(index);
+            return true;
+        }
+
+        /// <summary>
+        /// 重命名预设
+        /// </summary>
+        public bool RenamePreset(int index, string newName)
+        {
+            if (index < 0 || index >= Presets.Count || string.IsNullOrWhiteSpace(newName))
+            {
+                return false;
+            }
+            Presets[index].PresetName = newName;
+            return true;
         }
     }
 }

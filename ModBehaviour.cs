@@ -23,8 +23,16 @@ namespace PresetLoadout
 
         // GUI 窗口
         private bool _showWindow = false;
-        private Rect _windowRect = new Rect(100, 100, 400, 300);
+        private Rect _windowRect = new Rect(20, 100, 450, 400); // 初始位置（会在打开时动态调整）
         private const int WINDOW_ID = 12345;
+        private bool _windowPositionInitialized = false; // 标记是否已初始化窗口位置
+
+        // 重命名状态
+        private int _renamingIndex = -1;
+        private string _renamingText = "";
+
+        // 背包UI检测
+        private readonly bool _requireInventoryOpen = true; // 是否要求背包打开才能使用面板
 
         void Awake()
         {
@@ -34,6 +42,28 @@ namespace PresetLoadout
 
         void Start()
         {
+        }
+
+        /// <summary>
+        /// 检测玩家背包UI是否打开
+        /// </summary>
+        private bool IsInventoryUIOpen()
+        {
+            try
+            {
+                // 直接查找游戏的背包UI对象 "EquipmentAndInventory"
+                GameObject inventoryUI = GameObject.Find("EquipmentAndInventory");
+                if (inventoryUI != null && inventoryUI.activeInHierarchy)
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PresetLoadout] Error detecting inventory UI: {ex.Message}");
+            }
+
+            return false;
         }
 
         void Update()
@@ -48,45 +78,52 @@ namespace PresetLoadout
                 }
             }
 
-            // 保存预设: Ctrl + 1/2/3
-            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+            // 检测背包关闭，自动关闭预设面板
+            if (_showWindow && _requireInventoryOpen)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1))
+                if (!IsInventoryUIOpen())
                 {
-                    SaveCurrentLoadout(1);
-                }
-                else if (Input.GetKeyDown(KeyCode.Alpha2))
-                {
-                    SaveCurrentLoadout(2);
-                }
-                else if (Input.GetKeyDown(KeyCode.Alpha3))
-                {
-                    SaveCurrentLoadout(3);
-                }
-            }
-            // 应用预设: 单独按 1/2/3
-            else
-            {
-                if (Input.GetKeyDown(KeyCode.Alpha1))
-                {
-                    ApplyLoadout(1);
-                }
-                else if (Input.GetKeyDown(KeyCode.Alpha2))
-                {
-                    ApplyLoadout(2);
-                }
-                else if (Input.GetKeyDown(KeyCode.Alpha3))
-                {
-                    ApplyLoadout(3);
+                    _showWindow = false;
+                    Debug.Log("[PresetLoadout] Auto-closing preset panel: Inventory UI closed");
                 }
             }
 
-            // 打开/关闭 GUI 窗口: P 键
-            if (Input.GetKeyDown(KeyCode.P))
+            // 打开/关闭 GUI 窗口: L 键
+            if (Input.GetKeyDown(KeyCode.L))
             {
+                // 如果要求背包打开，则检查背包状态
+                if (_requireInventoryOpen && !_showWindow)
+                {
+                    bool inventoryOpen = IsInventoryUIOpen();
+                    if (!inventoryOpen)
+                    {
+                        ShowMessage("请先打开背包/仓库界面");
+                        Debug.Log("[PresetLoadout] Cannot open preset panel: Inventory UI not detected");
+                        return;
+                    }
+                }
+
                 _showWindow = !_showWindow;
+
+                // 第一次打开时，将窗口定位到屏幕中间偏左
+                if (_showWindow && !_windowPositionInitialized)
+                {
+                    // 窗口宽度 450，高度 400
+                    float windowWidth = 450f;
+                    float windowHeight = 400f;
+
+                    // 水平方向：屏幕中心偏左一点，垂直居中
+                    float x = (Screen.width - windowWidth) / 2f - 100f; // 中心偏左100px
+                    float y = (Screen.height - windowHeight) / 2f;
+
+                    _windowRect = new Rect(x, y, windowWidth, windowHeight);
+                    _windowPositionInitialized = true;
+
+                    Debug.Log($"[PresetLoadout] Initialized window position: x={x}, y={y}, width={windowWidth}, height={windowHeight} (Screen: {Screen.width}x{Screen.height})");
+                }
+
                 Debug.Log($"[PresetLoadout] GUI Window: {(_showWindow ? "Opened" : "Closed")}");
-                ShowMessage(_showWindow ? "已打开装备预设面板" : "已关闭装备预设面板");
+                ShowMessage(_showWindow ? "已打开装备预设面板 (按L关闭)" : "已关闭装备预设面板");
             }
         }
 
@@ -126,14 +163,24 @@ namespace PresetLoadout
             GUILayout.BeginVertical();
 
             // 标题说明
-            GUILayout.Label("按 P 键打开/关闭此面板", EditorStyles());
+            GUILayout.Label("按 L 键打开/关闭此面板", EditorStyles());
             GUILayout.Space(10);
 
-            // 遍历 3 个预设
-            for (int i = 1; i <= 3; i++)
+            // 遍历所有预设
+            for (int i = 0; i < _presetStorage.Presets.Count; i++)
             {
                 DrawPresetSlot(i);
-                GUILayout.Space(10);
+                GUILayout.Space(5);
+            }
+
+            GUILayout.Space(10);
+
+            // 添加新预设按钮
+            if (GUILayout.Button("+ 添加新预设", GUILayout.Height(30)))
+            {
+                _presetStorage.AddPreset();
+                SaveConfig();
+                ShowMessage($"已添加预设 {_presetStorage.Presets.Count}");
             }
 
             GUILayout.Space(10);
@@ -145,45 +192,95 @@ namespace PresetLoadout
             GUI.DragWindow();
         }
 
-        void DrawPresetSlot(int slotNumber)
+        void DrawPresetSlot(int index)
         {
-            GUILayout.BeginHorizontal("box");
+            if (index < 0 || index >= _presetStorage.Presets.Count)
+                return;
 
-            // 预设名称和物品数量
-            string statusText = "空";
-            bool hasItems = false;
+            PresetConfig preset = _presetStorage.Presets[index];
+            int totalCount = preset.GetTotalItemCount();
+            bool hasItems = totalCount > 0;
+            string statusText = hasItems ? preset.GetDescription() : "空";
 
-            PresetConfig preset = _presetStorage.GetPreset(slotNumber);
-            if (preset != null)
+            GUILayout.BeginVertical("box");
+
+            // 第一行：预设名称（可编辑）和删除按钮
+            GUILayout.BeginHorizontal();
+
+            if (_renamingIndex == index)
             {
-                int totalCount = preset.GetTotalItemCount();
-                hasItems = totalCount > 0;
+                // 正在重命名：显示输入框
+                _renamingText = GUILayout.TextField(_renamingText, GUILayout.Width(200));
 
-                if (hasItems)
+                // 确认按钮
+                if (GUILayout.Button("✓", GUILayout.Width(30)))
                 {
-                    statusText = preset.GetDescription();
+                    if (_presetStorage.RenamePreset(index, _renamingText))
+                    {
+                        SaveConfig();
+                        ShowMessage($"预设已重命名为: {_renamingText}");
+                    }
+                    _renamingIndex = -1;
+                }
+
+                // 取消按钮
+                if (GUILayout.Button("✗", GUILayout.Width(30)))
+                {
+                    _renamingIndex = -1;
                 }
             }
-
-            GUILayout.Label($"预设 {slotNumber}: [{statusText}]", BoldLabelStyle(), GUILayout.Width(180));
-
-            GUILayout.FlexibleSpace();
-
-            // 保存按钮
-            if (GUILayout.Button("保存当前", GUILayout.Width(100)))
+            else
             {
-                SaveCurrentLoadout(slotNumber);
-            }
+                // 显示预设名称，点击可重命名
+                if (GUILayout.Button(preset.PresetName, BoldLabelStyle(), GUILayout.Width(200)))
+                {
+                    _renamingIndex = index;
+                    _renamingText = preset.PresetName;
+                }
 
-            // 应用按钮
-            GUI.enabled = hasItems;
-            if (GUILayout.Button("应用此预设", GUILayout.Width(100)))
-            {
-                ApplyLoadout(slotNumber);
+                // 物品数量
+                GUILayout.Label($"[{statusText}]", GUILayout.Width(120));
+
+                GUILayout.FlexibleSpace();
+
+                // 删除按钮（至少保留3个预设）
+                GUI.enabled = _presetStorage.Presets.Count > 3;
+                if (GUILayout.Button("删除", GUILayout.Width(50)))
+                {
+                    if (_presetStorage.RemovePreset(index))
+                    {
+                        SaveConfig();
+                        ShowMessage($"已删除预设: {preset.PresetName}");
+                    }
+                }
+                GUI.enabled = true;
             }
-            GUI.enabled = true;
 
             GUILayout.EndHorizontal();
+
+            // 第二行：保存和应用按钮（仅在非重命名状态显示）
+            if (_renamingIndex != index)
+            {
+                GUILayout.BeginHorizontal();
+
+                // 保存按钮
+                if (GUILayout.Button("保存当前装备", GUILayout.Height(25)))
+                {
+                    SaveCurrentLoadout(index + 1); // slotNumber = index + 1
+                }
+
+                // 应用按钮
+                GUI.enabled = hasItems;
+                if (GUILayout.Button("应用此预设", GUILayout.Height(25)))
+                {
+                    ApplyLoadout(index + 1); // slotNumber = index + 1
+                }
+                GUI.enabled = true;
+
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndVertical();
         }
 
         // GUI 样式辅助方法
@@ -278,16 +375,16 @@ namespace PresetLoadout
                 }
 
                 // 保存到预设（使用新的数据结构）
-                var preset = _presetStorage.GetPreset(slotNumber);
-                if (preset == null)
+                int index = slotNumber - 1;
+                if (index < 0 || index >= _presetStorage.Presets.Count)
                 {
-                    preset = new PresetConfig($"预设 {slotNumber}");
-                    _presetStorage.SetPreset(slotNumber, preset);
+                    Debug.LogError($"[PresetLoadout] Invalid preset slot: {slotNumber}");
+                    return;
                 }
 
+                var preset = _presetStorage.Presets[index];
                 preset.EquippedItemTypeIDs = equippedIDs;
                 preset.InventoryItemTypeIDs = inventoryIDs;
-                preset.PresetName = $"预设 {slotNumber}";
 
                 // 保存到文件
                 SaveConfig();
@@ -311,28 +408,47 @@ namespace PresetLoadout
         {
             try
             {
-                // 检查 parentInventory 字段
-                var inventoryField = item.GetType().GetField("parentInventory");
-                if (inventoryField != null)
+                // 方法1: 检查 inInventory 字段
+                var inInventoryField = item.GetType().GetField("inInventory",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance);
+
+                if (inInventoryField != null)
                 {
-                    var inventory = inventoryField.GetValue(item);
-                    return inventory != null;
+                    var inventory = inInventoryField.GetValue(item);
+                    if (inventory != null)
+                    {
+                        Debug.Log($"[PresetLoadout]     Item {item.TypeID} ({item.name}) - inInventory: EXISTS -> INVENTORY");
+                        return true; // 在背包中
+                    }
                 }
 
-                // 备用方案：检查 transform 父对象名称
-                if (item.transform.parent != null)
+                // 方法2: 检查 pluggedIntoSlot 字段
+                var pluggedIntoSlotField = item.GetType().GetField("pluggedIntoSlot",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance);
+
+                if (pluggedIntoSlotField != null)
                 {
-                    string parentName = item.transform.parent.name.ToLower();
-                    return parentName.Contains("inventory") || parentName.Contains("backpack");
+                    var slot = pluggedIntoSlotField.GetValue(item);
+                    if (slot != null)
+                    {
+                        Debug.Log($"[PresetLoadout]     Item {item.TypeID} ({item.name}) - pluggedIntoSlot: EXISTS -> EQUIPPED");
+                        return false; // 插在槽位上，是装备
+                    }
                 }
+
+                // 默认：如果两个字段都是 null，可能是顶层装备（如背包本身）
+                Debug.Log($"[PresetLoadout]     Item {item.TypeID} ({item.name}) - Both fields NULL -> EQUIPPED (likely top-level equipment)");
+                return false;
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"[PresetLoadout] Error checking if item {item.TypeID} is in inventory: {ex.Message}");
+                return false;
             }
-
-            // 默认认为是装备槽位
-            return false;
         }
 
         /// <summary>
@@ -342,14 +458,15 @@ namespace PresetLoadout
         {
             try
             {
-                PresetConfig preset = _presetStorage.GetPreset(slotNumber);
-
-                if (preset == null)
+                int index = slotNumber - 1;
+                if (index < 0 || index >= _presetStorage.Presets.Count)
                 {
                     ShowMessage($"预设 {slotNumber} 不存在!");
                     Debug.Log($"[PresetLoadout] Apply Preset {slotNumber}: Preset does not exist");
                     return;
                 }
+
+                PresetConfig preset = _presetStorage.Presets[index];
 
                 int totalItems = preset.GetTotalItemCount();
                 if (totalItems == 0)
@@ -362,56 +479,54 @@ namespace PresetLoadout
                 Debug.Log($"[PresetLoadout] ===== Applying Preset {slotNumber} =====");
                 Debug.Log($"[PresetLoadout] Equipped items: {preset.EquippedItemTypeIDs?.Count ?? 0}, Inventory items: {preset.InventoryItemTypeIDs?.Count ?? 0}");
 
-                // 获取玩家仓库中的所有物品
+                // 获取仓库和玩家身上的物品（分别统计）
                 List<Item> storageItems = GetPlayerStorageItems();
+                List<Item> playerItems = GetPlayerItems();
 
-                if (storageItems == null || storageItems.Count == 0)
-                {
-                    ShowMessage("仓库中没有物品!");
-                    Debug.Log($"[PresetLoadout] Apply Preset {slotNumber}: No items in storage");
-                    return;
-                }
+                Debug.Log($"[PresetLoadout] Found {storageItems?.Count ?? 0} items in storage, {playerItems?.Count ?? 0} items on player");
 
-                Debug.Log($"[PresetLoadout] Found {storageItems.Count} items in storage");
+                int successCount = 0;      // 从仓库成功获取的
+                int alreadyOnPlayer = 0;   // 已经在玩家身上的
+                int failCount = 0;          // 完全找不到的
+                List<Item> usedItems = new List<Item>(); // 记录已使用的物品
 
-                int successCount = 0;
-                int failCount = 0;
-
-                // 第一步：优先应用装备槽位的物品（使用 SendToPlayerCharacter）
+                // 第一步：先装备所有装备（包括背包）
                 if (preset.EquippedItemTypeIDs != null && preset.EquippedItemTypeIDs.Count > 0)
                 {
-                    Debug.Log($"[PresetLoadout] Step 1: Applying {preset.EquippedItemTypeIDs.Count} EQUIPPED items: [{string.Join(", ", preset.EquippedItemTypeIDs)}]");
+                    Debug.Log($"[PresetLoadout] Step 1: Equipping {preset.EquippedItemTypeIDs.Count} items: [{string.Join(", ", preset.EquippedItemTypeIDs)}]");
 
                     foreach (int typeID in preset.EquippedItemTypeIDs)
                     {
-                        Item matchingItem = storageItems.FirstOrDefault(item =>
-                            item != null && item.TypeID == typeID && item.IsInPlayerStorage());
+                        // 先检查是否已经在玩家身上
+                        bool alreadyHas = playerItems?.Any(item => item != null && item.TypeID == typeID) ?? false;
+
+                        if (alreadyHas)
+                        {
+                            alreadyOnPlayer++;
+                            Debug.Log($"[PresetLoadout]   ✓ TypeID {typeID} already on player (skipped)");
+                            continue;
+                        }
+
+                        // 从仓库中查找未使用的物品
+                        Item matchingItem = storageItems?.FirstOrDefault(item =>
+                            item != null &&
+                            item.TypeID == typeID &&
+                            !usedItems.Contains(item));
 
                         if (matchingItem != null)
                         {
-                            // 优先尝试装备到角色身上
                             bool success = ItemUtilities.SendToPlayerCharacter(matchingItem, dontMerge: true);
 
                             if (success)
                             {
                                 successCount++;
-                                Debug.Log($"[PresetLoadout]   ✓ Equipped TypeID {typeID} ({matchingItem.name})");
+                                usedItems.Add(matchingItem); // 标记为已使用
+                                Debug.Log($"[PresetLoadout]   ✓ Equipped TypeID {typeID} from storage ({matchingItem.name})");
                             }
                             else
                             {
-                                // 如果装备失败，尝试放入背包
-                                success = ItemUtilities.SendToPlayerCharacterInventory(matchingItem, dontMerge: true);
-
-                                if (success)
-                                {
-                                    successCount++;
-                                    Debug.Log($"[PresetLoadout]   ✓ Sent TypeID {typeID} to inventory (slot full)");
-                                }
-                                else
-                                {
-                                    failCount++;
-                                    Debug.LogWarning($"[PresetLoadout]   ✗ Failed to apply TypeID {typeID} ({matchingItem.name})");
-                                }
+                                failCount++;
+                                Debug.LogWarning($"[PresetLoadout]   ✗ Failed to equip TypeID {typeID} ({matchingItem.name})");
                             }
                         }
                         else
@@ -422,30 +537,44 @@ namespace PresetLoadout
                     }
                 }
 
-                // 第二步：应用背包物品（使用 SendToPlayerCharacterInventory）
+                // 第二步：把背包物品放入玩家背包 Inventory
                 if (preset.InventoryItemTypeIDs != null && preset.InventoryItemTypeIDs.Count > 0)
                 {
-                    Debug.Log($"[PresetLoadout] Step 2: Applying {preset.InventoryItemTypeIDs.Count} INVENTORY items: [{string.Join(", ", preset.InventoryItemTypeIDs)}]");
+                    Debug.Log($"[PresetLoadout] Step 2: Sending {preset.InventoryItemTypeIDs.Count} items to player inventory: [{string.Join(", ", preset.InventoryItemTypeIDs)}]");
 
                     foreach (int typeID in preset.InventoryItemTypeIDs)
                     {
-                        Item matchingItem = storageItems.FirstOrDefault(item =>
-                            item != null && item.TypeID == typeID && item.IsInPlayerStorage());
+                        // 先检查是否已经在玩家身上
+                        bool alreadyHas = playerItems?.Any(item => item != null && item.TypeID == typeID) ?? false;
+
+                        if (alreadyHas)
+                        {
+                            alreadyOnPlayer++;
+                            Debug.Log($"[PresetLoadout]   ✓ TypeID {typeID} already in player inventory (skipped)");
+                            continue;
+                        }
+
+                        // 从仓库中查找未使用的物品
+                        Item matchingItem = storageItems?.FirstOrDefault(item =>
+                            item != null &&
+                            item.TypeID == typeID &&
+                            !usedItems.Contains(item));
 
                         if (matchingItem != null)
                         {
-                            // 发送到背包
-                            bool success = ItemUtilities.SendToPlayerCharacterInventory(matchingItem, dontMerge: true);
+                            // 直接使用 SendToPlayerCharacterInventory，允许合并
+                            bool success = ItemUtilities.SendToPlayerCharacterInventory(matchingItem, dontMerge: false);
 
                             if (success)
                             {
                                 successCount++;
-                                Debug.Log($"[PresetLoadout]   ✓ Sent TypeID {typeID} to inventory ({matchingItem.name})");
+                                usedItems.Add(matchingItem); // 标记为已使用
+                                Debug.Log($"[PresetLoadout]   ✓ Sent TypeID {typeID} to inventory from storage ({matchingItem.name})");
                             }
                             else
                             {
                                 failCount++;
-                                Debug.LogWarning($"[PresetLoadout]   ✗ Failed TypeID {typeID} ({matchingItem.name})");
+                                Debug.LogWarning($"[PresetLoadout]   ✗ Failed to send TypeID {typeID} to inventory ({matchingItem.name})");
                             }
                         }
                         else
@@ -457,14 +586,22 @@ namespace PresetLoadout
                 }
 
                 // 显示结果
-                string message = $"预设 {slotNumber} 应用完成\n✓ 成功: {successCount}";
+                string message = $"预设 {slotNumber} 应用完成";
+                if (successCount > 0)
+                {
+                    message += $"\n✓ 从仓库获取: {successCount}";
+                }
+                if (alreadyOnPlayer > 0)
+                {
+                    message += $"\n✓ 已在身上: {alreadyOnPlayer}";
+                }
                 if (failCount > 0)
                 {
-                    message += $"\n✗ 失败: {failCount} (仓库中没有)";
+                    message += $"\n✗ 缺失: {failCount}";
                 }
 
                 ShowMessage(message);
-                Debug.Log($"[PresetLoadout] Apply complete - Success: {successCount}, Failed: {failCount}");
+                Debug.Log($"[PresetLoadout] Apply complete - From storage: {successCount}, Already on player: {alreadyOnPlayer}, Missing: {failCount}");
                 Debug.Log($"[PresetLoadout] ================================");
             }
             catch (Exception ex)
@@ -512,6 +649,109 @@ namespace PresetLoadout
             }
 
             return items;
+        }
+
+        /// <summary>
+        /// 获取玩家身上的所有背包物品
+        /// </summary>
+        private List<Item> GetPlayerBackpacks()
+        {
+            List<Item> backpacks = new List<Item>();
+
+            try
+            {
+                Item[] allItems = FindObjectsOfType<Item>();
+
+                foreach (Item item in allItems)
+                {
+                    if (item != null && item.IsInPlayerCharacter() && item.TypeID > 0)
+                    {
+                        // 检查物品是否有 inventory 字段（说明它是背包）
+                        var inventoryField = item.GetType().GetField("inventory",
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.Instance);
+
+                        if (inventoryField != null)
+                        {
+                            var inventory = inventoryField.GetValue(item);
+                            if (inventory != null)
+                            {
+                                backpacks.Add(item);
+                                Debug.Log($"[PresetLoadout] Found backpack: {item.name} (TypeID: {item.TypeID})");
+                            }
+                        }
+                    }
+                }
+
+                Debug.Log($"[PresetLoadout] GetPlayerBackpacks: Found {backpacks.Count} backpack(s)");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PresetLoadout] Error getting player backpacks: {ex.Message}\n{ex.StackTrace}");
+            }
+
+            return backpacks;
+        }
+
+        /// <summary>
+        /// 尝试将物品添加到背包的 Inventory 中
+        /// </summary>
+        private bool TryAddItemToBackpack(Item item, Item backpack)
+        {
+            try
+            {
+                // 获取背包的 inventory 字段
+                var inventoryField = backpack.GetType().GetField("inventory",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance);
+
+                if (inventoryField == null)
+                {
+                    Debug.LogWarning($"[PresetLoadout] Backpack {backpack.name} has no inventory field");
+                    return false;
+                }
+
+                var inventory = inventoryField.GetValue(backpack);
+                if (inventory == null)
+                {
+                    Debug.LogWarning($"[PresetLoadout] Backpack {backpack.name} inventory is null");
+                    return false;
+                }
+
+                // 获取 Inventory 类型的 Add 方法
+                var inventoryType = inventory.GetType();
+                var addMethod = inventoryType.GetMethod("Add",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.Instance,
+                    null,
+                    new Type[] { typeof(Item) },
+                    null);
+
+                if (addMethod == null)
+                {
+                    Debug.LogWarning($"[PresetLoadout] Inventory.Add method not found");
+                    return false;
+                }
+
+                // 调用 Add 方法
+                var result = addMethod.Invoke(inventory, new object[] { item });
+
+                // Add 方法可能返回 bool 或 void
+                if (result is bool boolResult)
+                {
+                    return boolResult;
+                }
+
+                // 如果是 void 方法，假设成功
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PresetLoadout] Error adding item to backpack: {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
@@ -610,8 +850,8 @@ namespace PresetLoadout
                     // 验证加载的数据
                     if (_presetStorage != null && _presetStorage.Presets != null)
                     {
-                        Debug.Log($"[PresetLoadout] ✓ Loaded {_presetStorage.Presets.Length} presets from config");
-                        for (int i = 0; i < _presetStorage.Presets.Length; i++)
+                        Debug.Log($"[PresetLoadout] ✓ Loaded {_presetStorage.Presets.Count} presets from config");
+                        for (int i = 0; i < _presetStorage.Presets.Count; i++)
                         {
                             var preset = _presetStorage.Presets[i];
                             int totalItems = preset?.GetTotalItemCount() ?? 0;

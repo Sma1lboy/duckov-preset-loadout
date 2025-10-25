@@ -23,7 +23,7 @@ namespace PresetLoadout
             lines.Add("{");
             lines.Add("  \"Presets\": [");
 
-            for (int i = 0; i < storage.Presets.Length; i++)
+            for (int i = 0; i < storage.Presets.Count; i++)
             {
                 var preset = storage.Presets[i];
                 if (preset == null) continue;
@@ -39,7 +39,7 @@ namespace PresetLoadout
                 lines.Add("      \"InventoryItemTypeIDs\": [" +
                     SerializeIntList(preset.InventoryItemTypeIDs) + "]");
 
-                lines.Add("    }" + (i < storage.Presets.Length - 1 ? "," : ""));
+                lines.Add("    }" + (i < storage.Presets.Count - 1 ? "," : ""));
             }
 
             lines.Add("  ]");
@@ -62,20 +62,37 @@ namespace PresetLoadout
 
             try
             {
-                // 简单的手动解析：查找每个预设
-                for (int i = 0; i < 3; i++)
-                {
-                    int presetIndex = json.IndexOf($"\"PresetName\": \"预设 {i + 1}\"");
-                    if (presetIndex == -1) continue;
+                // 清空默认的3个预设，准备从JSON加载
+                storage.Presets.Clear();
 
-                    var preset = storage.Presets[i];
+                // 查找所有预设块 "PresetName"
+                int searchStart = 0;
+                while (true)
+                {
+                    int presetNameIndex = json.IndexOf("\"PresetName\":", searchStart);
+                    if (presetNameIndex == -1) break;
+
+                    // 提取预设名称
+                    int nameStart = json.IndexOf("\"", presetNameIndex + 13);
+                    if (nameStart == -1) break;
+                    nameStart++; // 跳过引号
+
+                    int nameEnd = json.IndexOf("\"", nameStart);
+                    if (nameEnd == -1 || nameEnd <= nameStart) break;
+
+                    string presetName = json.Substring(nameStart, nameEnd - nameStart);
+                    var preset = new PresetConfig(presetName);
+
+                    // 查找下一个预设的位置（用于限制搜索范围）
+                    int nextPresetIndex = json.IndexOf("\"PresetName\":", presetNameIndex + 13);
+                    int searchLimit = nextPresetIndex != -1 ? nextPresetIndex : json.Length;
 
                     // 解析 EquippedItemTypeIDs
-                    int equippedStart = json.IndexOf("\"EquippedItemTypeIDs\": [", presetIndex);
-                    if (equippedStart != -1)
+                    int equippedStart = json.IndexOf("\"EquippedItemTypeIDs\": [", presetNameIndex);
+                    if (equippedStart != -1 && equippedStart < searchLimit)
                     {
                         int equippedEnd = json.IndexOf("]", equippedStart);
-                        if (equippedEnd != -1)
+                        if (equippedEnd != -1 && equippedEnd > equippedStart + 24)
                         {
                             string equippedStr = json.Substring(equippedStart + 24, equippedEnd - equippedStart - 24);
                             preset.EquippedItemTypeIDs = ParseIntList(equippedStr);
@@ -83,16 +100,27 @@ namespace PresetLoadout
                     }
 
                     // 解析 InventoryItemTypeIDs
-                    int inventoryStart = json.IndexOf("\"InventoryItemTypeIDs\": [", presetIndex);
-                    if (inventoryStart != -1)
+                    int inventoryStart = json.IndexOf("\"InventoryItemTypeIDs\": [", presetNameIndex);
+                    if (inventoryStart != -1 && inventoryStart < searchLimit)
                     {
                         int inventoryEnd = json.IndexOf("]", inventoryStart);
-                        if (inventoryEnd != -1)
+                        if (inventoryEnd != -1 && inventoryEnd > inventoryStart + 25)
                         {
                             string inventoryStr = json.Substring(inventoryStart + 25, inventoryEnd - inventoryStart - 25);
                             preset.InventoryItemTypeIDs = ParseIntList(inventoryStr);
                         }
                     }
+
+                    storage.Presets.Add(preset);
+                    searchStart = presetNameIndex + 13;
+                }
+
+                // 如果没有加载到任何预设，使用默认的3个
+                if (storage.Presets.Count == 0)
+                {
+                    storage.Presets.Add(new PresetConfig("预设 1"));
+                    storage.Presets.Add(new PresetConfig("预设 2"));
+                    storage.Presets.Add(new PresetConfig("预设 3"));
                 }
             }
             catch (Exception)
