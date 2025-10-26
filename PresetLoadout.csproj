@@ -18,6 +18,8 @@
     <!-- 下面这行里填写你的鸭科夫安装路径 -->
     <DuckovPath>/Users/jacksonc/Library/Application Support/Steam/steamapps/common/Escape from Duckov/Duckov.app/Contents/Resources/Data</DuckovPath>
   </PropertyGroup>
+
+  <!-- 依赖引用 -->
   <ItemGroup>
     <Reference Include="$(DuckovPath)/Managed/TeamSoda.*" />
     <Reference Include="$(DuckovPath)/Managed/ItemStatsSystem.dll" />
