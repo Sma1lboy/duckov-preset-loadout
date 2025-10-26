@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using ItemStatsSystem;
+using UnityEngine;
 
 namespace PresetLoadout
 {
@@ -53,6 +55,100 @@ namespace PresetLoadout
                 return "空";
 
             return $"装备:{equippedCount} 背包:{inventoryCount}";
+        }
+
+        /// <summary>
+        /// 获取物品显示名称（使用游戏 API）
+        /// </summary>
+        private static string GetItemDisplayName(int typeID)
+        {
+            try
+            {
+                Item tempItem = ItemAssetsCollection.InstantiateSync(typeID);
+                if (tempItem != null)
+                {
+                    string name = tempItem.DisplayName;
+                    UnityEngine.Object.Destroy(tempItem.gameObject);
+                    return name;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PresetLoadout] Failed to get item name for TypeID {typeID}: {ex.Message}");
+            }
+            return $"物品 {typeID}";
+        }
+
+        /// <summary>
+        /// 获取预设中所有物品的详细信息
+        /// </summary>
+        public List<PresetItemInfo> GetItemInfos()
+        {
+            List<PresetItemInfo> infos = new List<PresetItemInfo>();
+
+            // 添加装备物品
+            if (EquippedItemTypeIDs != null)
+            {
+                foreach (int typeID in EquippedItemTypeIDs)
+                {
+                    infos.Add(new PresetItemInfo
+                    {
+                        TypeID = typeID,
+                        IsEquipped = true,
+                        DisplayName = GetItemDisplayName(typeID)
+                    });
+                }
+            }
+
+            // 添加背包物品
+            if (InventoryItemTypeIDs != null)
+            {
+                foreach (int typeID in InventoryItemTypeIDs)
+                {
+                    infos.Add(new PresetItemInfo
+                    {
+                        TypeID = typeID,
+                        IsEquipped = false,
+                        DisplayName = GetItemDisplayName(typeID)
+                    });
+                }
+            }
+
+            return infos;
+        }
+    }
+
+    /// <summary>
+    /// 预设物品信息
+    /// </summary>
+    public class PresetItemInfo
+    {
+        public int TypeID;
+        public bool IsEquipped; // true=装备, false=背包
+        public string DisplayName;
+    }
+
+    /// <summary>
+    /// 预设对比结果
+    /// </summary>
+    public class PresetCompareResult
+    {
+        public List<PresetItemInfo> ToAdd = new List<PresetItemInfo>();      // 需要添加的物品
+        public List<PresetItemInfo> ToRemove = new List<PresetItemInfo>();   // 需要移除的物品
+        public List<PresetItemInfo> Unchanged = new List<PresetItemInfo>();  // 不变的物品
+        public List<int> MissingInStorage = new List<int>();                 // 仓库中缺少的物品
+
+        /// <summary>
+        /// 获取对比结果的文本描述
+        /// </summary>
+        public string GetSummary()
+        {
+            string summary = $"需要添加: {ToAdd.Count} | 需要移除: {ToRemove.Count} | 不变: {Unchanged.Count}";
+            if (MissingInStorage.Count > 0)
+            {
+                summary += $"\n[警告] 仓库缺少 {MissingInStorage.Count} 个物品";
+            }
+            return summary;
         }
     }
 

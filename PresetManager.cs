@@ -332,5 +332,182 @@ namespace PresetLoadout
                 showMessage?.Invoke($"✗ 应用预设 {slotNumber} 失败!");
             }
         }
+
+        /// <summary>
+        /// 对比预设与当前装备的差异
+        /// </summary>
+        public PresetCompareResult CompareWithCurrent(PresetConfig preset)
+        {
+            PresetCompareResult result = new PresetCompareResult();
+
+            try
+            {
+                // 获取当前装备和背包物品
+                List<int> currentEquipped = new List<int>();
+                List<int> currentInventory = new List<int>();
+
+                List<Item> playerItems = ItemOperations.GetPlayerItems();
+                if (playerItems != null)
+                {
+                    foreach (Item item in playerItems)
+                    {
+                        if (item == null || item.TypeID <= 0)
+                            continue;
+
+                        // 判断是装备还是背包物品
+                        if (ItemOperations.IsItemInInventory(item))
+                        {
+                            currentInventory.Add(item.TypeID);
+                        }
+                        else
+                        {
+                            currentEquipped.Add(item.TypeID);
+                        }
+                    }
+                }
+
+                // 对比装备物品
+                if (preset.EquippedItemTypeIDs != null)
+                {
+                    foreach (int typeID in preset.EquippedItemTypeIDs)
+                    {
+                        var itemInfo = new PresetItemInfo
+                        {
+                            TypeID = typeID,
+                            IsEquipped = true,
+                            DisplayName = GetItemDisplayName(typeID)
+                        };
+
+                        if (!currentEquipped.Contains(typeID))
+                        {
+                            result.ToAdd.Add(itemInfo);
+
+                            // 检查仓库是否有
+                            if (!IsItemInStorage(typeID))
+                            {
+                                result.MissingInStorage.Add(typeID);
+                            }
+                        }
+                        else
+                        {
+                            result.Unchanged.Add(itemInfo);
+                        }
+                    }
+                }
+
+                // 对比背包物品
+                if (preset.InventoryItemTypeIDs != null)
+                {
+                    foreach (int typeID in preset.InventoryItemTypeIDs)
+                    {
+                        var itemInfo = new PresetItemInfo
+                        {
+                            TypeID = typeID,
+                            IsEquipped = false,
+                            DisplayName = GetItemDisplayName(typeID)
+                        };
+
+                        if (!currentInventory.Contains(typeID))
+                        {
+                            result.ToAdd.Add(itemInfo);
+
+                            // 检查仓库是否有
+                            if (!IsItemInStorage(typeID))
+                            {
+                                result.MissingInStorage.Add(typeID);
+                            }
+                        }
+                        else
+                        {
+                            result.Unchanged.Add(itemInfo);
+                        }
+                    }
+                }
+
+                // 找出需要移除的装备物品
+                foreach (int typeID in currentEquipped)
+                {
+                    if (preset.EquippedItemTypeIDs == null || !preset.EquippedItemTypeIDs.Contains(typeID))
+                    {
+                        result.ToRemove.Add(new PresetItemInfo
+                        {
+                            TypeID = typeID,
+                            IsEquipped = true,
+                            DisplayName = GetItemDisplayName(typeID)
+                        });
+                    }
+                }
+
+                // 找出需要移除的背包物品
+                foreach (int typeID in currentInventory)
+                {
+                    if (preset.InventoryItemTypeIDs == null || !preset.InventoryItemTypeIDs.Contains(typeID))
+                    {
+                        result.ToRemove.Add(new PresetItemInfo
+                        {
+                            TypeID = typeID,
+                            IsEquipped = false,
+                            DisplayName = GetItemDisplayName(typeID)
+                        });
+                    }
+                }
+
+                Debug.Log($"[PresetLoadout] Compare result: ToAdd={result.ToAdd.Count}, ToRemove={result.ToRemove.Count}, Unchanged={result.Unchanged.Count}, Missing={result.MissingInStorage.Count}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PresetLoadout] Failed to compare preset: {ex.Message}");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 检查物品是否在仓库中
+        /// </summary>
+        private bool IsItemInStorage(int typeID)
+        {
+            try
+            {
+                List<Item> storageItems = ItemOperations.GetPlayerStorageItems();
+                if (storageItems != null)
+                {
+                    foreach (Item item in storageItems)
+                    {
+                        if (item != null && item.TypeID == typeID)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PresetLoadout] Error checking storage for TypeID {typeID}: {ex.Message}");
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取物品显示名称
+        /// </summary>
+        private string GetItemDisplayName(int typeID)
+        {
+            try
+            {
+                Item tempItem = ItemAssetsCollection.InstantiateSync(typeID);
+                if (tempItem != null)
+                {
+                    string name = tempItem.DisplayName;
+                    UnityEngine.Object.Destroy(tempItem.gameObject);
+                    return name;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[PresetLoadout] Failed to get item name for TypeID {typeID}: {ex.Message}");
+            }
+            return $"物品 {typeID}";
+        }
     }
 }

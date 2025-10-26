@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -405,9 +406,15 @@ namespace PresetLoadout
 
             // 创建应用按钮
             bool hasItems = preset.GetTotalItemCount() > 0;
-            CreateButton(buttonsObj, "应用此预设", new Vector2(0.52f, 0.5f), new Vector2(1, 1), () =>
+            CreateButton(buttonsObj, "应用此预设", new Vector2(0.52f, 0.5f), new Vector2(0.74f, 1), () =>
             {
                 _presetManager.ApplyLoadout(index + 1, ShowMessage);
+            }, !hasItems);
+
+            // 创建预览按钮
+            CreateButton(buttonsObj, "预览", new Vector2(0.76f, 0.5f), new Vector2(1, 1), () =>
+            {
+                ShowPresetPreview(preset);
             }, !hasItems);
 
             // 创建删除按钮（如果预设数量大于3）
@@ -560,6 +567,220 @@ namespace PresetLoadout
             texture.filterMode = FilterMode.Bilinear;
 
             return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(cornerRadius, cornerRadius, cornerRadius, cornerRadius));
+        }
+
+        /// <summary>
+        /// 显示预设预览窗口（纯文本版本）
+        /// </summary>
+        public void ShowPresetPreview(PresetConfig preset)
+        {
+            try
+            {
+                // 获取对比结果
+                PresetCompareResult compareResult = _presetManager.CompareWithCurrent(preset);
+
+                // 创建预览窗口
+                GameObject previewWindow = new GameObject("PresetPreviewWindow");
+                previewWindow.transform.SetParent(_panelRoot.transform, false);
+
+                RectTransform windowRect = previewWindow.AddComponent<RectTransform>();
+                windowRect.sizeDelta = new Vector2(550, 650);
+                windowRect.anchoredPosition = new Vector2(320, 0); // 显示在预设面板右侧
+
+                // 添加背景
+                Image background = previewWindow.AddComponent<Image>();
+                background.sprite = CreateRoundedSprite(12);
+                background.type = Image.Type.Sliced;
+                background.color = new Color(0.06f, 0.10f, 0.16f, 0.95f);
+
+                // 创建标题区域（固定在顶部）
+                GameObject titleArea = new GameObject("TitleArea");
+                titleArea.transform.SetParent(previewWindow.transform, false);
+                RectTransform titleRect = titleArea.AddComponent<RectTransform>();
+                titleRect.anchorMin = new Vector2(0, 1);
+                titleRect.anchorMax = new Vector2(1, 1);
+                titleRect.pivot = new Vector2(0.5f, 1);
+                titleRect.sizeDelta = new Vector2(-20, 60);
+                titleRect.anchoredPosition = new Vector2(0, -10);
+
+                // 添加标题文本
+                TextMeshProUGUI titleText = UnityEngine.Object.Instantiate(GameplayDataSettings.UIStyle.TemplateTextUGUI);
+                titleText.transform.SetParent(titleArea.transform, false);
+                titleText.transform.localScale = Vector3.one;
+                RectTransform titleTextRect = titleText.GetComponent<RectTransform>();
+                titleTextRect.anchorMin = Vector2.zero;
+                titleTextRect.anchorMax = Vector2.one;
+                titleTextRect.offsetMin = Vector2.zero;
+                titleTextRect.offsetMax = Vector2.zero;
+                titleText.text = $"预设预览: {preset.PresetName}";
+                titleText.fontSize = 20f;
+                titleText.alignment = TextAlignmentOptions.Center;
+                titleText.fontStyle = FontStyles.Bold;
+
+                // 创建滚动区域
+                GameObject scrollObj = new GameObject("ScrollView");
+                scrollObj.transform.SetParent(previewWindow.transform, false);
+
+                RectTransform scrollRect = scrollObj.AddComponent<RectTransform>();
+                scrollRect.anchorMin = new Vector2(0, 0.12f);
+                scrollRect.anchorMax = new Vector2(1, 0.88f);
+                scrollRect.offsetMin = new Vector2(15, 10);
+                scrollRect.offsetMax = new Vector2(-15, -10);
+
+                // 创建内容容器
+                GameObject contentObj = new GameObject("Content");
+                contentObj.transform.SetParent(scrollObj.transform, false);
+
+                RectTransform contentRect = contentObj.AddComponent<RectTransform>();
+                contentRect.anchorMin = new Vector2(0, 1);
+                contentRect.anchorMax = new Vector2(1, 1);
+                contentRect.pivot = new Vector2(0.5f, 1);
+                contentRect.sizeDelta = new Vector2(0, 0);
+                contentRect.anchoredPosition = Vector2.zero;
+
+                float yPos = -10f;
+                float lineHeight = 26f; // 增加行高
+
+                // 显示统计信息
+                yPos = AddTextToPreview(contentObj, $"需要添加: {compareResult.ToAdd.Count}  |  移除: {compareResult.ToRemove.Count}  |  不变: {compareResult.Unchanged.Count}", 15, yPos);
+                yPos -= lineHeight + 10f;
+
+                // 只显示仓库缺少的物品（如果有）
+                if (compareResult.MissingInStorage.Count > 0)
+                {
+                    yPos = AddTextToPreview(contentObj, "仓库缺少以下物品:", 17, yPos, true);
+                    yPos -= lineHeight + 5f;
+
+                    // 从 ToAdd 列表中筛选出缺少的物品
+                    foreach (var itemInfo in compareResult.ToAdd)
+                    {
+                        if (compareResult.MissingInStorage.Contains(itemInfo.TypeID))
+                        {
+                            string itemText = $"  {itemInfo.DisplayName}  ({(itemInfo.IsEquipped ? "装备" : "背包")})";
+                            yPos = AddTextToPreview(contentObj, itemText, 15, yPos);
+                            yPos -= lineHeight;
+                        }
+                    }
+                }
+                else
+                {
+                    // 如果仓库物品充足，显示提示
+                    yPos = AddTextToPreview(contentObj, "仓库物品充足，可以应用此预设", 16, yPos);
+                    yPos -= lineHeight + 15f;
+
+                    // 显示预设内容概览
+                    yPos = AddTextToPreview(contentObj, "预设内容:", 17, yPos, true);
+                    yPos -= lineHeight + 5f;
+
+                    // 显示装备
+                    if (compareResult.ToAdd.Count > 0 || compareResult.Unchanged.Count > 0)
+                    {
+                        var allEquipped = compareResult.ToAdd.Where(x => x.IsEquipped)
+                            .Concat(compareResult.Unchanged.Where(x => x.IsEquipped))
+                            .ToList();
+
+                        if (allEquipped.Count > 0)
+                        {
+                            yPos = AddTextToPreview(contentObj, $"装备槽位 ({allEquipped.Count} 件):", 15, yPos);
+                            yPos -= lineHeight;
+
+                            foreach (var item in allEquipped.Take(5))
+                            {
+                                yPos = AddTextToPreview(contentObj, $"  {item.DisplayName}", 14, yPos);
+                                yPos -= lineHeight;
+                            }
+
+                            if (allEquipped.Count > 5)
+                            {
+                                yPos = AddTextToPreview(contentObj, $"  ... 还有 {allEquipped.Count - 5} 件", 14, yPos);
+                                yPos -= lineHeight;
+                            }
+                            yPos -= 5f;
+                        }
+                    }
+
+                    // 显示背包
+                    if (compareResult.ToAdd.Count > 0 || compareResult.Unchanged.Count > 0)
+                    {
+                        var allInventory = compareResult.ToAdd.Where(x => !x.IsEquipped)
+                            .Concat(compareResult.Unchanged.Where(x => !x.IsEquipped))
+                            .ToList();
+
+                        if (allInventory.Count > 0)
+                        {
+                            yPos = AddTextToPreview(contentObj, $"背包物品 ({allInventory.Count} 件):", 15, yPos);
+                            yPos -= lineHeight;
+
+                            foreach (var item in allInventory.Take(5))
+                            {
+                                yPos = AddTextToPreview(contentObj, $"  {item.DisplayName}", 14, yPos);
+                                yPos -= lineHeight;
+                            }
+
+                            if (allInventory.Count > 5)
+                            {
+                                yPos = AddTextToPreview(contentObj, $"  ... 还有 {allInventory.Count - 5} 件", 14, yPos);
+                                yPos -= lineHeight;
+                            }
+                        }
+                    }
+                }
+
+                // 设置内容高度
+                contentRect.sizeDelta = new Vector2(0, Mathf.Abs(yPos) + 20f);
+
+                // 添加关闭按钮
+                CreateButton(previewWindow, "关闭", new Vector2(0.25f, 0.02f), new Vector2(0.75f, 0.10f), () =>
+                {
+                    UnityEngine.Object.Destroy(previewWindow);
+                });
+
+                Debug.Log($"[PresetLoadout] Preview window created for preset: {preset.PresetName}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PresetLoadout] Failed to show preset preview: {ex.Message}");
+                ShowMessage("预览功能出错!");
+            }
+        }
+
+        /// <summary>
+        /// 在预览窗口中添加文本（使用固定行高）
+        /// </summary>
+        private float AddTextToPreview(GameObject parent, string text, int fontSize, float yPos, bool bold = false)
+        {
+            GameObject textObj = new GameObject($"Text_{Guid.NewGuid()}");
+            textObj.transform.SetParent(parent.transform, false);
+
+            TextMeshProUGUI tmpText = UnityEngine.Object.Instantiate(GameplayDataSettings.UIStyle.TemplateTextUGUI);
+            tmpText.transform.SetParent(textObj.transform, false);
+            tmpText.transform.localScale = Vector3.one;
+
+            RectTransform textRect = tmpText.GetComponent<RectTransform>();
+            textRect.anchorMin = new Vector2(0, 1);
+            textRect.anchorMax = new Vector2(1, 1);
+            textRect.pivot = new Vector2(0, 1);
+            textRect.anchoredPosition = new Vector2(10, yPos);
+            textRect.localRotation = Quaternion.identity; // 确保没有旋转
+
+            // 使用固定高度
+            float lineHeight = fontSize * 1.6f;
+            textRect.sizeDelta = new Vector2(-20, lineHeight);
+
+            tmpText.text = text;
+            tmpText.fontSize = fontSize;
+            tmpText.alignment = TextAlignmentOptions.Left;
+            tmpText.enableWordWrapping = false;
+            tmpText.overflowMode = TextOverflowModes.Overflow;
+            tmpText.horizontalAlignment = HorizontalAlignmentOptions.Left;
+            tmpText.verticalAlignment = VerticalAlignmentOptions.Top;
+
+            if (bold)
+            {
+                tmpText.fontStyle = FontStyles.Bold;
+            }
+
+            return yPos;
         }
     }
 }
