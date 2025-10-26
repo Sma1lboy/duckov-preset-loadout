@@ -17,6 +17,38 @@
 
 ---
 
+## [1.1.0] - 2025-10-26
+
+### 新增 / New Features
+- ✨ 预设对比和预览功能 - 应用预设前可查看将要装备的物品差异
+  - Preset comparison and preview - View item differences before applying presets
+- ✨ 预设管理系统 - 新增 PresetManager 类统一管理预设操作
+  - Preset management system - New PresetManager class for unified preset operations
+- ✨ 可拖动窗口 - 预设面板支持鼠标拖动
+  - Draggable window - Preset panel supports mouse dragging
+- ✨ 物品操作工具 - 新增 ItemOperations 类封装物品查询和移动逻辑
+  - Item operations utility - New ItemOperations class for item queries and movement
+- ✨ UI助手类 - 新增 UIHelper 类管理UI交互
+  - UI helper class - New UIHelper class for managing UI interactions
+- ✨ 场景工具类 - 新增 SceneUtils 类检测游戏状态
+  - Scene utility class - New SceneUtils class for detecting game state
+
+### 改进 / Improvements
+- 🏗️ 代码架构重构 - 将单文件 ModBehaviour 拆分为多个模块化组件
+  - Code architecture refactoring - Split single ModBehaviour into modular components
+- 🎨 UI体验优化 - 改进面板显示和交互逻辑
+  - UI experience optimization - Improved panel display and interaction logic
+- 📦 发布流程改进 - 添加自动化发布命令 `/release`
+  - Release process improvement - Added automated release command `/release`
+
+### 文档 / Documentation
+- 📝 更新开发文档 - 同步版本说明到 v1.2
+  - Updated development docs - Synced version notes to v1.2
+- 📝 添加发布流程文档 - `.claude/commands/release.md`
+  - Added release process documentation - `.claude/commands/release.md`
+
+---
+
 ## [1.0.1] - 2025-10-25
 
 ### 改进
