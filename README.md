@@ -69,13 +69,29 @@
    └── preview.png
    ```
 
-## 开发工具
+## 开发与发布
 
-详细的开发脚本和工作流，请参考 [scripts/README.md](scripts/README.md)。
+### 快速开发
+```bash
+./scripts/deploy.sh       # 编译并部署到游戏
+./scripts/watch-log.sh    # 实时查看日志
+```
 
-**快速开发命令**:
-- `./scripts/deploy.sh` - 编译并部署
-- `./scripts/watch-log.sh` - 实时查看游戏日志
+### 版本发布
+```bash
+./scripts/release.sh             # 发布 patch 版本 (1.0.0 → 1.0.1)
+./scripts/release.sh -t minor    # 发布 minor 版本 (1.0.0 → 1.1.0)
+./scripts/release.sh -t major    # 发布 major 版本 (1.0.0 → 2.0.0)
+```
+
+版本号存储在 [VERSION](VERSION) 文件中，发布脚本会自动：
+- 更新版本号到所有相关文件
+- 编译 Release 版本
+- 创建 ZIP 发布包
+- 部署到 Workshop
+- 创建 Git 标签和 GitHub Release
+
+详见 [scripts/README.md](scripts/README.md)
 
 ## 技术细节
 
