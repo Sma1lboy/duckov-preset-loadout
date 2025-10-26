@@ -2,6 +2,19 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <Nullable>enable</Nullable>
+
+    <!-- Version -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+
+    <!-- Metadata -->
+    <Authors>jacksonc</Authors>
+    <Company>Sma1lboy</Company>
+    <Product>PresetLoadout</Product>
+    <Description>装备预设系统 - 快速保存和应用装备配置</Description>
+    <RepositoryUrl>https://github.com/Sma1lboy/duckov-preset-loadout</RepositoryUrl>
+
     <!-- 下面这行里填写你的鸭科夫安装路径 -->
     <DuckovPath>/Users/jacksonc/Library/Application Support/Steam/steamapps/common/Escape from Duckov/Duckov.app/Contents/Resources/Data</DuckovPath>
   </PropertyGroup>

@@ -29,3 +29,10 @@ obj/
 # Temporary files
 *.tmp
 *.temp
+
+# Release artifacts
+releases/*.zip
+releases/PresetLoadout-v*
+
+# Keep the releases directory but ignore the contents
+!releases/.gitkeep

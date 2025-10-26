@@ -479,6 +479,11 @@ namespace PresetLoadout
                 Debug.Log($"[PresetLoadout] ===== Applying Preset {slotNumber} =====");
                 Debug.Log($"[PresetLoadout] Equipped items: {preset.EquippedItemTypeIDs?.Count ?? 0}, Inventory items: {preset.InventoryItemTypeIDs?.Count ?? 0}");
 
+                // 第一步：将玩家身上的所有物品放回仓库
+                Debug.Log($"[PresetLoadout] Step 0: Sending all player items to storage...");
+                int movedToStorage = SendAllPlayerItemsToStorage();
+                Debug.Log($"[PresetLoadout] Moved {movedToStorage} items to storage");
+
                 // 获取仓库和玩家身上的物品（分别统计）
                 List<Item> storageItems = GetPlayerStorageItems();
                 List<Item> playerItems = GetPlayerItems();
@@ -791,6 +796,55 @@ namespace PresetLoadout
             }
 
             return items;
+        }
+
+        /// <summary>
+        /// 将玩家身上的所有物品发送到仓库
+        /// </summary>
+        /// <returns>移动的物品数量</returns>
+        private int SendAllPlayerItemsToStorage()
+        {
+            int movedCount = 0;
+
+            try
+            {
+                // 获取玩家身上的所有物品
+                List<Item> playerItems = GetPlayerItems();
+
+                if (playerItems == null || playerItems.Count == 0)
+                {
+                    Debug.Log($"[PresetLoadout] No items on player to move to storage");
+                    return 0;
+                }
+
+                Debug.Log($"[PresetLoadout] Found {playerItems.Count} items on player, moving to storage...");
+
+                // 逐个发送到仓库
+                foreach (Item item in playerItems)
+                {
+                    if (item != null && item.TypeID > 0)
+                    {
+                        try
+                        {
+                            ItemUtilities.SendToPlayerStorage(item, directToBuffer: false);
+                            movedCount++;
+                            Debug.Log($"[PresetLoadout]   → Moved TypeID {item.TypeID} ({item.name}) to storage");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"[PresetLoadout]   ✗ Failed to move item {item.TypeID} ({item.name}): {ex.Message}");
+                        }
+                    }
+                }
+
+                Debug.Log($"[PresetLoadout] Successfully moved {movedCount}/{playerItems.Count} items to storage");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PresetLoadout] Error in SendAllPlayerItemsToStorage: {ex.Message}\n{ex.StackTrace}");
+            }
+
+            return movedCount;
         }
 
         /// <summary>
