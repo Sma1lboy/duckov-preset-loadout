@@ -17,6 +17,18 @@
 
 ---
 
+## [1.0.1] - 2025-10-25
+
+### 改进
+- 📦 添加自动化版本发布系统
+- 🔧 改进发布脚本，支持从 CHANGELOG 自动生成 Release Notes
+- 📝 精简项目文档
+
+### 修复
+- 修复文档冗余问题
+
+---
+
 ## [1.0.0] - 2025-10-25
 
 ### 新增
@@ -43,11 +55,12 @@
 - .NET Standard 2.1
 - 支持 Windows 和 macOS
 
-### 文档
-- 添加 README.md (功能说明)
-- 添加 INSTALL.md (安装指南)
-- 添加 RELEASE.md (发布指南)
-- 添加脚本文档
+### 安装方法
+1. 下载 `PresetLoadout-v1.0.0.zip`
+2. 解压到 Mod 目录
+3. 在游戏中启用 Mod
+
+详见 [INSTALL.md](https://github.com/Sma1lboy/duckov-preset-loadout/blob/main/INSTALL.md)
 
 ---
 

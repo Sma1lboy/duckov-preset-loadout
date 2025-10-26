@@ -179,9 +179,20 @@ publishedFileId = 3591339491
 EOF
     fi
 
+    # 复制 preview.png
+    if [ -f "$PROJECT_ROOT/preview.png" ]; then
+        cp "$PROJECT_ROOT/preview.png" "$release_path/PresetLoadout/"
+        print_success "已添加预览图"
+    fi
+
     # 复制文档
     cp "$PROJECT_ROOT/README.md" "$release_path/"
     cp "$PROJECT_ROOT/INSTALL.md" "$release_path/"
+
+    # 复制 preview.png 到根目录（用于 README）
+    if [ -f "$PROJECT_ROOT/preview.png" ]; then
+        cp "$PROJECT_ROOT/preview.png" "$release_path/"
+    fi
 
     # 创建压缩包
     cd "$RELEASE_DIR"
@@ -241,6 +252,49 @@ push_to_github() {
     print_success "已推送到 GitHub"
 }
 
+# 从 CHANGELOG.md 提取指定版本的更新日志
+extract_changelog_for_version() {
+    local version=$1
+    local changelog_file="$PROJECT_ROOT/CHANGELOG.md"
+
+    if [ ! -f "$changelog_file" ]; then
+        print_warning "CHANGELOG.md 不存在，使用默认 Release Notes"
+        echo ""
+        return
+    fi
+
+    # 提取指定版本的内容
+    # 从 "## [$version]" 开始，到下一个 "## [" 或文件末尾结束
+    local content=$(sed -n "/## \[$version\]/,/## \[/p" "$changelog_file" | sed '$d' | tail -n +2)
+
+    if [ -z "$content" ]; then
+        print_warning "CHANGELOG.md 中未找到版本 $version 的更新日志，使用默认模板"
+        echo ""
+        return
+    fi
+
+    echo "$content"
+}
+
+# 生成默认 Release Notes
+generate_default_release_notes() {
+    local version=$1
+    cat <<EOF
+### 新特性
+- 快速保存和应用装备配置
+- 支持 3 个预设槽位
+- 智能从仓库获取装备
+- 可视化反馈
+
+### 安装方法
+1. 下载 \`PresetLoadout-v$version.zip\`
+2. 解压到 Mod 目录
+3. 在游戏中启用 Mod
+
+详见 [INSTALL.md](https://github.com/Sma1lboy/duckov-preset-loadout/blob/main/INSTALL.md)
+EOF
+}
+
 # 创建 GitHub Release
 create_github_release() {
     local version=$1
@@ -264,21 +318,18 @@ create_github_release() {
         return 1
     fi
 
-    # 生成 Release Notes
+    # 从 CHANGELOG.md 提取 Release Notes
+    local changelog_content=$(extract_changelog_for_version "$version")
+
+    # 如果 CHANGELOG 中没有内容，使用默认模板
+    if [ -z "$changelog_content" ]; then
+        changelog_content=$(generate_default_release_notes "$version")
+    fi
+
+    # 完整的 Release Notes
     local release_notes="## PresetLoadout v$version
 
-### 新特性
-- 快速保存和应用装备配置
-- 支持 3 个预设槽位
-- 智能从仓库获取装备
-- 可视化反馈
-
-### 安装方法
-1. 下载 \`PresetLoadout-v$version.zip\`
-2. 解压到 Mod 目录
-3. 在游戏中启用 Mod
-
-详见 [INSTALL.md](https://github.com/Sma1lboy/duckov-preset-loadout/blob/main/INSTALL.md)
+$changelog_content
 "
 
     # 创建 Release

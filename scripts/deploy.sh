@@ -22,7 +22,20 @@ if [ $? -eq 0 ]; then
 
     WORKSHOP_PATH="/Users/jacksonc/Library/Application Support/Steam/steamapps/workshop/content/3167020/3591339491"
 
+    # 复制 DLL
     cp bin/Release/netstandard2.1/PresetLoadout.dll "$WORKSHOP_PATH/"
+
+    # 复制 preview.png (如果存在)
+    if [ -f "preview.png" ]; then
+        cp preview.png "$WORKSHOP_PATH/"
+        echo "📷 已更新预览图"
+    fi
+
+    # 复制 info.ini (如果存在)
+    if [ -f "ReleaseExample/PresetLoadout/info.ini" ]; then
+        cp ReleaseExample/PresetLoadout/info.ini "$WORKSHOP_PATH/"
+        echo "📝 已更新 info.ini"
+    fi
 
     echo ""
     echo "✅ 部署完成!"

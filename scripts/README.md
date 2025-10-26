@@ -33,6 +33,7 @@
 - 部署到 Workshop 目录
 - 创建 Git 标签并推送
 - 创建 GitHub Release (需要 `gh` CLI)
+- **自动从 CHANGELOG.md 提取 Release Notes** ✨
 
 ### 版本类型
 
@@ -60,7 +61,8 @@
 2. `./scripts/deploy.sh` - 快速测试
 3. `./scripts/watch-log.sh` - 查看日志（可选）
 4. 测试通过后提交代码
-5. `./scripts/release.sh` - 发布新版本
+5. **更新 CHANGELOG.md** - 在对应版本下添加更新内容
+6. `./scripts/release.sh` - 发布新版本（自动提取 CHANGELOG 作为 Release Notes）
 
 ---
 
